@@ -11,6 +11,7 @@ Usage:
     python examples/test_streaming_optimized.py
 """
 
+import argparse
 import time
 import numpy as np
 import torch
@@ -81,6 +82,10 @@ def run_streaming_test(
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Test streaming TTS with optimizations")
+    parser.add_argument("--runs", type=int, default=5, help="Number of optimized test runs (default: 5)")
+    args = parser.parse_args()
+
     total_start = time.time()
 
     # Streaming parameters - KEEP THESE CONSISTENT!
@@ -188,31 +193,23 @@ def main():
     warmup_rtf = warmup_result['total_time'] / warmup_result['audio_duration'] if warmup_result['audio_duration'] > 0 else 0
     print(f"Warmup: First chunk: {warmup_result['first_chunk_time']:.2f}s, Total: {warmup_result['total_time']:.2f}s, Audio: {warmup_result['audio_duration']:.2f}s, RTF: {warmup_rtf:.2f}")
 
-    # Actual test run
-    print("\nOptimized test run...")
-    result = run_streaming_test(
-        model, test_text, "Russian", voice_clone_prompt,
-        emit_every_frames=EMIT_EVERY,
-        decode_window_frames=DECODE_WINDOW,
-        label="streaming_optimized",
-    )
-    results.append(result)
-    sf.write("output_streaming_optimized-ref-fixed-crossfade.wav", result["audio"], result["sample_rate"])
-    opt_rtf = result['total_time'] / result['audio_duration'] if result['audio_duration'] > 0 else 0
-    print(f"First chunk: {result['first_chunk_time']:.2f}s, Total: {result['total_time']:.2f}s, Chunks: {result['chunk_count']}")
-    print(f"Audio duration: {result['audio_duration']:.2f}s, Chunk duration: {result['avg_chunk_duration']*1000:.0f}ms, RTF: {opt_rtf:.2f}")
+    # Run optimized test runs to show stable performance
+    optimized_results = []
+    for run_num in range(1, args.runs + 1):
+        print(f"\nOptimized run {run_num}/{args.runs}...")
+        result = run_streaming_test(
+            model, test_text, "Russian", voice_clone_prompt,
+            emit_every_frames=EMIT_EVERY,
+            decode_window_frames=DECODE_WINDOW,
+            label=f"streaming_optimized_{run_num}",
+        )
+        results.append(result)
+        optimized_results.append(result)
+        opt_rtf = result['total_time'] / result['audio_duration'] if result['audio_duration'] > 0 else 0
+        print(f"First chunk: {result['first_chunk_time']:.2f}s, Total: {result['total_time']:.2f}s, Audio: {result['audio_duration']:.2f}s, RTF: {opt_rtf:.2f}")
 
-    # Second optimized run to show stable performance
-    print("\nSecond optimized run...")
-    result2 = run_streaming_test(
-        model, test_text, "Russian", voice_clone_prompt,
-        emit_every_frames=EMIT_EVERY,
-        decode_window_frames=DECODE_WINDOW,
-        label="streaming_optimized_2",
-    )
-    results.append(result2)
-    opt2_rtf = result2['total_time'] / result2['audio_duration'] if result2['audio_duration'] > 0 else 0
-    print(f"First chunk: {result2['first_chunk_time']:.2f}s, Total: {result2['total_time']:.2f}s, Audio: {result2['audio_duration']:.2f}s, RTF: {opt2_rtf:.2f}")
+    # Save only the last run's audio
+    sf.write("output_streaming_optimized-ref-fixed-crossfade.wav", optimized_results[-1]["audio"], optimized_results[-1]["sample_rate"])
 
     # ============== Summary ==============
     print("\n" + "=" * 80)
